@@ -1,0 +1,2 @@
+m,reduction_factor,annotator_dim,test_micro_f1,test_macro_f1,test_hamming_loss,best_val_loss,best_epoch,train_minutes
+256,3.0,32,0.7038071439070999,0.6846310530471129,0.09478784457615956,0.238369420170784,7,10.15

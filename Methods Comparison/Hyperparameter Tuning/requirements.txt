@@ -1,0 +1,25 @@
+# LoRA Hyperparameter Sweep — server dependencies
+#
+# NOTE: PyTorch must be installed separately with the correct CUDA version.
+# Check your server's CUDA version first:
+#   nvcc --version   OR   nvidia-smi
+#
+# Then install PyTorch from https://pytorch.org/get-started/locally/
+# Example for CUDA 12.1:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+#
+# If the vllm conda environment already has a working torch+CUDA, skip torch below.
+
+# HuggingFace stack
+transformers>=4.40.0
+accelerate>=0.27.0
+datasets>=2.18.0
+
+# AdapterHub (provides LoRAConfig and adapters.init)
+adapters>=1.0.0
+
+# ML / data
+scikit-learn>=1.3.0
+numpy>=1.24.0
+pandas>=2.0.0
+matplotlib>=3.7.0
