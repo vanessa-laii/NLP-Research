@@ -82,7 +82,7 @@ SEED           = 42
 
 EKMAN_EMOTIONS = ["joy", "anger", "sadness", "fear", "disgust", "surprise"]
 
-M_VALUES = [256]   # best config from hyperparameter sweep
+M_VALUES = [16, 32, 64, 128, 256]   
 
 
 # ── DATASET ───────────────────────────────────────────────────────────────────
@@ -245,6 +245,24 @@ def build_model(num_labels: int, num_annotators: int, m: int, device: str):
           f"({trainable / total * 100:.2f}%)")
     print(f"  Annotator embedding table: {num_annotators} × {ANNOTATOR_DIM} = "
           f"{num_annotators * ANNOTATOR_DIM:,} params")
+
+    # ── Debug: verify which layers are unfrozen ───────────────────────────────
+    print("\n  [DEBUG] Unfrozen parameter groups:")
+    frozen_count    = 0
+    unfrozen_count  = 0
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            print(f"    TRAINABLE  {name:60s}  shape={list(param.shape)}")
+            unfrozen_count += 1
+        else:
+            frozen_count += 1
+    print(f"\n  [DEBUG] Summary: {unfrozen_count} trainable groups, "
+          f"{frozen_count} frozen groups")
+
+    emb_trainable = all(p.requires_grad for p in model.annotator_embedding.parameters())
+    print(f"  [DEBUG] annotator_embedding unfrozen: {emb_trainable}")
+    clf_trainable = all(p.requires_grad for p in model.classifier.parameters())
+    print(f"  [DEBUG] classifier unfrozen:          {clf_trainable}\n")
 
     return model
 
@@ -550,6 +568,57 @@ def write_report(report_path, all_results, epoch_losses_path):
     print(f"\n  sweep_report.txt written  → {report_path}")
 
 
+def write_final_results(output_dir: str, all_results: list):
+    """Write a concise final_results.txt with the key numbers for easy download."""
+    path = os.path.join(output_dir, "final_results.txt")
+    sep  = "=" * 60
+    best = max(all_results, key=lambda x: x["test_micro_f1"])
+
+    lines = [
+        sep,
+        "  Bottleneck Adapter + Annotator Embedding — Final Results",
+        f"  Model         : {MODEL_NAME}",
+        f"  Annotator dim : {ANNOTATOR_DIM}  (embedding table: 81 × {ANNOTATOR_DIM})",
+        f"  Loss function : Binary Cross-Entropy with Logits (BCE)",
+        f"  Threshold     : {THRESHOLD}",
+        sep,
+        "",
+        "  ALL RUNS (sorted by micro F1):",
+        f"  {'m':>5}  {'red_factor':>11}  {'micro_F1':>10}  {'macro_F1':>10}  "
+        f"{'hamming':>10}  {'best_val_loss':>14}  {'best_epoch':>11}  {'mins':>6}",
+        "-" * 95,
+    ]
+
+    for row in sorted(all_results, key=lambda x: x["test_micro_f1"], reverse=True):
+        lines.append(
+            f"  {row['m']:>5}  {row['reduction_factor']:>11.1f}  "
+            f"{row['test_micro_f1']:>10.4f}  {row['test_macro_f1']:>10.4f}  "
+            f"{row['test_hamming_loss']:>10.4f}  "
+            f"{row['best_val_loss']:>14.4f}  {row['best_epoch']:>11}  "
+            f"{row['train_minutes']:>6.1f}"
+        )
+
+    lines += [
+        "",
+        sep,
+        "  BEST CONFIG:",
+        f"    m                  = {best['m']}",
+        f"    reduction_factor   = {best['reduction_factor']}",
+        f"    annotator_dim      = {best['annotator_dim']}",
+        f"    test_micro_F1      = {best['test_micro_f1']:.4f}",
+        f"    test_macro_F1      = {best['test_macro_f1']:.4f}",
+        f"    test_hamming_loss  = {best['test_hamming_loss']:.4f}",
+        f"    best_val_loss      = {best['best_val_loss']:.4f}",
+        f"    best_epoch         = {best['best_epoch']}",
+        f"    train_minutes      = {best['train_minutes']}",
+        sep,
+    ]
+
+    with open(path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    print(f"  final_results.txt written → {path}")
+
+
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
 def parse_args():
@@ -620,11 +689,13 @@ def main():
     print(f"\nBest config → m={best['m']}  (micro_f1={best['test_micro_f1']:.4f})")
 
     write_report(report_path, all_results, epoch_losses_path)
+    write_final_results(args.output_dir, all_results)
 
     print(f"\nOutput files in {args.output_dir}:")
     print(f"  sweep_results.csv    — one row per run")
     print(f"  epoch_losses.csv     — per-epoch train/val loss")
     print(f"  sweep_report.txt     — human-readable summary")
+    print(f"  final_results.txt    — concise final results for easy download")
     print(f"  m*/loss_curve_*.png  — loss curve per run")
 
 
